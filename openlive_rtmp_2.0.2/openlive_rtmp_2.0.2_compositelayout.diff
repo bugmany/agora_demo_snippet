@@ -1,0 +1,135 @@
+diff --git a/app/src/main/java/io/agora/openlive/model/WorkerThread.java b/app/src/main/java/io/agora/openlive/model/WorkerThread.java
+index 2e7aa39..39f51e1 100644
+--- a/app/src/main/java/io/agora/openlive/model/WorkerThread.java
++++ b/app/src/main/java/io/agora/openlive/model/WorkerThread.java
+@@ -14,11 +14,12 @@ import android.text.TextUtils;
+ import io.agora.common.Constant;
+ import io.agora.openlive.R;
+ import io.agora.rtc.Constants;
++import io.agora.rtc.PublisherConfiguration;
+ import io.agora.rtc.RtcEngine;
+ import io.agora.rtc.video.VideoCanvas;
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+-
++import io.agora.rtc.video.VideoCompositingLayout;
+ import java.io.File;
+ 
+ public class WorkerThread extends Thread {
+@@ -173,7 +174,20 @@ public class WorkerThread extends Thread {
+         mEngineConfig.mVideoProfile = vProfile;
+ 
+         mRtcEngine.setVideoProfile(mEngineConfig.mVideoProfile, true);
+-
++//add by longxin
++        PublisherConfiguration.Builder builder = null;
++        builder = new PublisherConfiguration.Builder()
++                    .owner(true)
++                    .size(640,360)
++                    .bitRate(500)
++                    .frameRate(15)
++                    .defaultLayout(1)
++                    .streamLifeCycle(Constants.STREAM_LIFE_CYCLE_BIND2CHANNEL)
++                    .publishUrl("rtmp://xxxxx")
++                    .extraInfo("");
++         PublisherConfiguration config = builder.build();
++         mRtcEngine.configPublisher(config);
++//add by longxin
+         mRtcEngine.setClientRole(cRole, "");
+         //mRtcEngine.setParameters("{\"rtc.log_filter\":32783}");
+         mRtcEngine.setLogFile("/sdcard/OpenLive_test.log");
+@@ -199,6 +213,49 @@ public class WorkerThread extends Thread {
+             mRtcEngine.stopPreview();
+         }
+     }
++//add by longxin
++    public static final int CUSTOMIZED_VIDEO_LAYOUT_MODE_FLOAT = 1;
++    public static final int CUSTOMIZED_VIDEO_LAYOUT_MODE_TILE = 2;
++
++    public static VideoCompositingLayout generateRTMPLayout(int localUid,int remoteUid, int mode) {
++        VideoCompositingLayout layout = new VideoCompositingLayout();
++
++        if(mode == CUSTOMIZED_VIDEO_LAYOUT_MODE_TILE) {
++            layout.canvasHeight = 360;
++            layout.canvasWidth = 640;
++            layout.backgroundColor = "#FFFFF";
++
++            layout.regions = new VideoCompositingLayout.Region[2];
++
++                VideoCompositingLayout.Region fR = new VideoCompositingLayout.Region();
++
++                    fR.uid = localUid;
++                    fR.height = 1.0;
++                    fR.width = 0.5;
++                    fR.x = 0;
++                    fR.y = 0;
++                    fR.zOrder = 0;
++                    fR.alpha = 1.0;
++                    fR.renderMode = VideoCanvas.RENDER_MODE_HIDDEN;
++                    layout.regions[0] = fR;
++
++            VideoCompositingLayout.Region fR1 = new VideoCompositingLayout.Region();
++
++            fR1.uid = remoteUid;
++            fR1.height = 1;
++            fR1.width = 0.5;
++            fR1.x = 0.5;
++            fR1.y = 0;
++            fR1.zOrder = 0;
++            fR1.alpha = 1.0;
++            fR1.renderMode = VideoCanvas.RENDER_MODE_HIDDEN;
++
++            layout.regions[1] = fR1;
++        }
++
++        return layout;
++    }
++//add by longxin
+ 
+     public static String getDeviceID(Context context) {
+         // XXX according to the API docs, this value may change after factory reset
+diff --git a/app/src/main/java/io/agora/openlive/ui/LiveRoomActivity.java b/app/src/main/java/io/agora/openlive/ui/LiveRoomActivity.java
+index 783d025..bc3da32 100644
+--- a/app/src/main/java/io/agora/openlive/ui/LiveRoomActivity.java
++++ b/app/src/main/java/io/agora/openlive/ui/LiveRoomActivity.java
+@@ -16,7 +16,7 @@ import android.view.ViewStub;
+ import android.widget.ImageView;
+ import android.widget.RelativeLayout;
+ import android.widget.TextView;
+-
++import io.agora.openlive.model.WorkerThread;
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+ 
+@@ -115,7 +115,7 @@ public class LiveRoomActivity extends BaseActivity implements AGEventHandler {
+             audienceUI(button1, button2, button3);
+         }
+ 
+-        worker().joinChannel(roomName, config().mUid);
++        worker().joinChannel(roomName,sLocalUid);// config().mUid);
+ 
+         TextView textRoomName = (TextView) findViewById(R.id.room_name);
+         textRoomName.setText(roomName);
+@@ -140,6 +140,8 @@ public class LiveRoomActivity extends BaseActivity implements AGEventHandler {
+             @Override
+             public void onClick(View v) {
+                 worker().getRtcEngine().switchCamera();
++                android.util.Log.v("longxin","sRemoteUid:"+sRemoteUid);
++                //worker().getRtcEngine().muteRemoteAudioStream(sRemoteUid,true);
+             }
+         });
+ 
+@@ -240,9 +242,12 @@ public class LiveRoomActivity extends BaseActivity implements AGEventHandler {
+             button3.setVisibility(View.INVISIBLE);
+         }
+     }
+-
++   public static int sRemoteUid;
++   public static int sLocalUid = 1234554321;
+     @Override
+     public void onFirstRemoteVideoDecoded(int uid, int width, int height, int elapsed) {
++         sRemoteUid = uid;
++         worker().getRtcEngine().setVideoCompositingLayout(WorkerThread.generateRTMPLayout(sLocalUid,sRemoteUid,2));
+     }
+ 
+     private void doSwitchToBroadcaster(boolean broadcaster) {
