@@ -1,5 +1,5 @@
 diff --git a/app/src/main/java/io/agora/openlive/model/WorkerThread.java b/app/src/main/java/io/agora/openlive/model/WorkerThread.java
-index 4c1d703..f8103d0 100644
+index 4c1d703..0e730a9 100644
 --- a/app/src/main/java/io/agora/openlive/model/WorkerThread.java
 +++ b/app/src/main/java/io/agora/openlive/model/WorkerThread.java
 @@ -12,6 +12,7 @@ import android.util.Log;
@@ -26,13 +26,13 @@ index 4c1d703..f8103d0 100644
 -
 +    private static RtcEngine mRtcEngine;
 +    //add by longxin
-+    public static int sLocalUid = (int)(System.currentTimeMillis()%10);
++    public static int sLocalUid = (int)(System.currentTimeMillis()%10000000);
 +    public static int sRemoteUid;
 +    //add by longxin
      public final void joinChannel(final String channel, int uid) {
          if (Thread.currentThread() != this) {
              log.warn("joinChannel() - worker thread asynchronously " + channel + " " + uid);
-@@ -123,13 +128,60 @@ public class WorkerThread extends Thread {
+@@ -123,13 +128,59 @@ public class WorkerThread extends Thread {
          }
  
          ensureRtcEngineReadyLock();
@@ -48,11 +48,12 @@ index 4c1d703..f8103d0 100644
 +    public static void triggerRtmp(){
 +        android.util.Log.v("longxin","sLocalUid:"+sLocalUid+" sRemoteUid:"+sRemoteUid);
 +        LiveTranscoding liveTranscoding = new LiveTranscoding();
-+        liveTranscoding.width = 1280;
-+        liveTranscoding.height = 720;
-+        liveTranscoding.videoBitrate = 800;
++        liveTranscoding.width = 1440;
++        liveTranscoding.height = 1280;
++        liveTranscoding.videoBitrate = 2500;
 +        liveTranscoding.videoFramerate = 15;
 +        liveTranscoding.setBackgroundColor(255,0,0);
++//        liveTranscoding.backgroundColor = 0xff0000;
 +
 +        ArrayList<LiveTranscoding.TranscodingUser> transcodingUsers = new ArrayList<>(2) ;
 +
@@ -60,19 +61,19 @@ index 4c1d703..f8103d0 100644
 +        userLocal.uid = sLocalUid;
 +        userLocal.x = 5;
 +        userLocal.y = 5;
-+        userLocal.width = 1280/2-10;
-+        userLocal.height = 710;
-+        userLocal.zOrder = 0;
++        userLocal.width = 1440/2-10;
++        userLocal.height = 1280-10;
++        userLocal.zOrder = 1;
 +        userLocal.alpha = 1;
 +        userLocal.audioChannel = 0;
 +
 +        LiveTranscoding.TranscodingUser userRemote = new LiveTranscoding.TranscodingUser();
 +        userRemote.uid = sRemoteUid;
-+        userRemote.x = 1280/2+5;
++        userRemote.x = 1440/2+5;
 +        userRemote.y = 5;
-+        userRemote.width = 1280/2-10;
-+        userRemote.height = 710;
-+        userRemote.zOrder = 0;
++        userRemote.width = 1440/2-10;
++        userRemote.height = 1280-10;
++        userRemote.zOrder = 1;
 +        userRemote.alpha = 1;
 +        userRemote.audioChannel = 0;
 +
@@ -92,7 +93,7 @@ index 4c1d703..f8103d0 100644
      public final void leaveChannel(String channel) {
          if (Thread.currentThread() != this) {
              log.warn("leaveChannel() - worker thread asynchronously " + channel);
-@@ -146,6 +198,8 @@ public class WorkerThread extends Thread {
+@@ -146,6 +197,8 @@ public class WorkerThread extends Thread {
  
          int clientRole = mEngineConfig.mClientRole;
          mEngineConfig.reset();
