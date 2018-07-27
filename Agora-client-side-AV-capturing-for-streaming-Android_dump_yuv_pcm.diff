@@ -1,0 +1,108 @@
+diff --git a/app/src/main/cpp/audio_video_preprocessing_plugin_jni.cpp b/app/src/main/cpp/audio_video_preprocessing_plugin_jni.cpp
+index af11417..2cec0e5 100644
+--- a/app/src/main/cpp/audio_video_preprocessing_plugin_jni.cpp
++++ b/app/src/main/cpp/audio_video_preprocessing_plugin_jni.cpp
+@@ -5,6 +5,10 @@
+ #include <limits.h>
+ #include <assert.h>
+ #include <algorithm>
++#include <stdio.h>
++#include <unistd.h>
++
++#include <fcntl.h>
+ 
+ #include "../include/agora/IAgoraMediaEngine.h"
+ #include "../include/agora/IAgoraRtcEngine.h"
+@@ -41,6 +45,29 @@ class AgoraAudioFrameObserver : public agora::media::IAudioFrameObserver
+ public:
+     virtual bool onRecordAudioFrame(AudioFrame& audioFrame) override
+     {
++        int len = audioFrame.samples * audioFrame.bytesPerSample * audioFrame.channels;
++
++        //int fd = open("/sdcard/record.pcm",O_APPEND|O_WRONLY|O_CREAT);
++
++        int fd = open("/sdcard/record.pcm",O_APPEND|O_WRONLY|O_CREAT);
++
++        //__android_log_print(ANDROID_LOG_ERROR, "plugin", "dump");
++
++        if(fd > 0){
++
++            write(fd,audioFrame.buffer,len);
++
++        }else{
++
++            __android_log_print(ANDROID_LOG_ERROR, "longxin", "dump pcm failed");
++
++        }
++
++        close(fd);
++
++        //memset(audioFrame.buffer,0,len);
++
++
+         return true;
+     }
+ 
+@@ -95,6 +122,44 @@ public:
+             memcpy(remoteY, videoFrame.yBuffer, videoFrame.yStride * videoFrame.height);
+             memcpy(remoteU, videoFrame.uBuffer, videoFrame.uStride * videoFrame.height / 2);
+             memcpy(remoteV, videoFrame.vBuffer, videoFrame.vStride * videoFrame.height / 2);
++
++//                    __android_log_print(ANDROID_LOG_DEBUG,"longxin","remoteUid=%d",remoteUid);
++//                    __android_log_print(ANDROID_LOG_DEBUG,"longxin","videoFrame.yStride=%d",videoFrame.yStride);
++//                    __android_log_print(ANDROID_LOG_DEBUG,"longxin","videoFrame.uStride=%d",videoFrame.uStride);
++//                    __android_log_print(ANDROID_LOG_DEBUG,"longxin","videoFrame.vStride=%d",videoFrame.vStride);
++//                    __android_log_print(ANDROID_LOG_DEBUG,"longxin","videoFrame.width=%d",videoFrame.width);
++//                    __android_log_print(ANDROID_LOG_DEBUG,"longxin","videoFrame.height=%d",videoFrame.height);
++
++            static FILE *gpFile = NULL;
++            static int gFrame = 0;
++            if(gpFile == NULL ){
++                gpFile = fopen("/sdcard/a.yuv","wb");
++            }
++
++            if(gpFile != NULL && gFrame < 55){
++                __android_log_print(ANDROID_LOG_ERROR, "longxin", "dump yuv gFrame %d",gFrame);
++                __android_log_print(ANDROID_LOG_ERROR, "longxin", "dump yuv gpFile %d",*gpFile);
++                //整体拷贝会有绿边形成
++//                fwrite(remoteY, 1, videoFrame.yStride * videoFrame.height, gpFile);
++//                fwrite(remoteU, 1, videoFrame.uStride * videoFrame.height / 2, gpFile);
++//                fwrite(remoteV, 1, videoFrame.vStride * videoFrame.height / 2, gpFile);
++                //整体拷贝会有绿边形成
++
++                //一行一行拷贝，width < stride , 过滤掉padding （width + padding = stride）
++                for(int i = 0; i < videoFrame.height; i++){
++                    fwrite(remoteY + videoFrame.yStride * i , videoFrame.width, 1 ,gpFile);
++                }
++                for(int i = 0; i < videoFrame.height/2; i++){
++                    fwrite(remoteU + videoFrame.uStride * i , videoFrame.width/2, 1 ,gpFile);
++                }
++                for(int i = 0; i < videoFrame.height/2; i++){
++                    fwrite(remoteV + videoFrame.vStride * i , videoFrame.width/2, 1 ,gpFile);
++                }
++                //一行一行拷贝，width < stride , 过滤掉padding （width + padding = stride）
++                gFrame ++;
++            } else if(gpFile != NULL){
++                fclose(gpFile);
++            }
+         }
+ 
+         hasRemoteVideo = true;
+@@ -150,7 +215,7 @@ JNIEXPORT void JNICALL Java_io_agora_ex_AudioVideoPreProcessing_doRegisterPrePro
+         return;
+ 
+     agora::util::AutoPtr<agora::media::IMediaEngine> mediaEngine;
+-    mediaEngine.queryInterface(rtcEngine, agora::rtc::AGORA_IID_MEDIA_ENGINE);
++    mediaEngine.queryInterface(rtcEngine, agora::AGORA_IID_MEDIA_ENGINE);
+     if (mediaEngine) {
+         mediaEngine->registerVideoFrameObserver(&s_videoFrameObserver);
+         mediaEngine->registerAudioFrameObserver(&s_audioFrameObserver);
+@@ -175,7 +240,7 @@ JNIEXPORT void JNICALL Java_io_agora_ex_AudioVideoPreProcessing_doDeregisterPreP
+   (JNIEnv *env, jobject obj)
+ {
+     agora::util::AutoPtr<agora::media::IMediaEngine> mediaEngine;
+-    mediaEngine.queryInterface(rtcEngine, agora::rtc::AGORA_IID_MEDIA_ENGINE);
++    mediaEngine.queryInterface(rtcEngine, agora::AGORA_IID_MEDIA_ENGINE);
+     if (mediaEngine) {
+         mediaEngine->registerVideoFrameObserver(NULL);
+         mediaEngine->registerAudioFrameObserver(NULL);
