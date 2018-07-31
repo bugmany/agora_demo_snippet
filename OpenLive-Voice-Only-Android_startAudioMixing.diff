@@ -1,0 +1,34 @@
+diff --git a/app/src/main/java/io/agora/openlive/voice/only/ui/LiveRoomActivity.java b/app/src/main/java/io/agora/openlive/voice/only/ui/LiveRoomActivity.java
+index ee0dcfe..282f647 100644
+--- a/app/src/main/java/io/agora/openlive/voice/only/ui/LiveRoomActivity.java
++++ b/app/src/main/java/io/agora/openlive/voice/only/ui/LiveRoomActivity.java
+@@ -4,6 +4,7 @@ import android.content.Intent;
+ import android.graphics.PorterDuff;
+ import android.media.AudioManager;
+ import android.os.Bundle;
++import android.os.Environment;
+ import android.os.Handler;
+ import android.os.Message;
+ import android.view.Menu;
+@@ -19,6 +20,8 @@ import android.widget.TextView;
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+ 
++import java.io.File;
++
+ import io.agora.openlive.voice.only.R;
+ import io.agora.openlive.voice.only.model.AGEventHandler;
+ import io.agora.openlive.voice.only.model.ConstantApp;
+@@ -319,6 +322,16 @@ public class LiveRoomActivity extends BaseActivity implements AGEventHandler {
+         log.debug(msg);
+ 
+         notifyMessageChanged(msg);
++        startAudioMixing("/sdcard/music/womenbuyiyang.mp3", false , false, 1);
++    }
++
++    private void startAudioMixing(String filePath, boolean loopback, boolean replace, int count) {
++        rtcEngine().startAudioMixing(filePath, loopback, replace, count);
++
+     }
+ 
+     @Override
