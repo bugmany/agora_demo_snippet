@@ -1,0 +1,87 @@
+diff --git a/app/src/main/java/io/agora/tutorials/customizedvideosource/VideoChatViewActivity.java b/app/src/main/java/io/agora/tutorials/customizedvideosource/VideoChatViewActivity.java
+index fa6f21a..da5db09 100644
+--- a/app/src/main/java/io/agora/tutorials/customizedvideosource/VideoChatViewActivity.java
++++ b/app/src/main/java/io/agora/tutorials/customizedvideosource/VideoChatViewActivity.java
+@@ -33,7 +33,6 @@ public class VideoChatViewActivity extends AppCompatActivity {
+ 
+     private static final int PERMISSION_REQ_ID_RECORD_AUDIO = 22;
+     private static final int PERMISSION_REQ_ID_CAMERA = PERMISSION_REQ_ID_RECORD_AUDIO + 1;
+-    private static final int PERMISSION_REQ_ID_STORAGE = PERMISSION_REQ_ID_RECORD_AUDIO + 2;
+ 
+     private CustomizedCameraRenderer mCustomizedCameraRenderer; // Tutorial Step 3
+     private RtcEngine mRtcEngine;// Tutorial Step 1
+@@ -64,12 +63,7 @@ public class VideoChatViewActivity extends AppCompatActivity {
+         super.onCreate(savedInstanceState);
+         setContentView(R.layout.activity_video_chat_view);
+ 
+-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO, PERMISSION_REQ_ID_RECORD_AUDIO)
+-             &&
+-             checkSelfPermission(Manifest.permission.CAMERA, PERMISSION_REQ_ID_CAMERA)
+-             &&
+-             checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE,PERMISSION_REQ_ID_STORAGE)
+-            ) {
++        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO, PERMISSION_REQ_ID_RECORD_AUDIO) && checkSelfPermission(Manifest.permission.CAMERA, PERMISSION_REQ_ID_CAMERA)) {
+             initAgoraEngineAndJoinChannel();
+         }
+     }
+@@ -111,22 +105,11 @@ public class VideoChatViewActivity extends AppCompatActivity {
+                 break;
+             }
+             case PERMISSION_REQ_ID_CAMERA: {
+-                if (grantResults.length > 0
+-                        && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+-                    checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE,PERMISSION_REQ_ID_STORAGE);
+-                    //initAgoraEngineAndJoinChannel();
+-                } else {
+-                    showLongToast("No permission for " + Manifest.permission.CAMERA);
+-                    finish();
+-                }
+-                break;
+-            }
+-            case PERMISSION_REQ_ID_STORAGE: {
+                 if (grantResults.length > 0
+                         && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                     initAgoraEngineAndJoinChannel();
+                 } else {
+-                    showLongToast("No permission for " + Manifest.permission.WRITE_EXTERNAL_STORAGE);
++                    showLongToast("No permission for " + Manifest.permission.CAMERA);
+                     finish();
+                 }
+                 break;
+@@ -255,10 +238,7 @@ public class VideoChatViewActivity extends AppCompatActivity {
+ 
+     // Tutorial Step 4
+     private void joinChannel() {
+-        mRtcEngine.setParameters("{\"rtc.log_filter\":65535}");
+-        mRtcEngine.setLogFile("/sdcard/agora-video-source-Android-agora-rtc.log");
+-        //mRtcEngine.setLogFilter(Constants.LOG_FILTER_DEBUG);
+-        mRtcEngine.setClientRole(Constants.CLIENT_ROLE_BROADCASTER);
++        mRtcEngine.setClientRole(Constants.CLIENT_ROLE_BROADCASTER, null);
+         mRtcEngine.joinChannel(null, "CustomizedVideoSourceChannel1", "Extra Optional Data", 0); // if you do not specify the uid, we will generate the uid for you
+     }
+ 
+diff --git a/app/src/main/java/io/agora/tutorials/helper/CustomizedCameraRenderer.java b/app/src/main/java/io/agora/tutorials/helper/CustomizedCameraRenderer.java
+index 55f6936..52bed3a 100644
+--- a/app/src/main/java/io/agora/tutorials/helper/CustomizedCameraRenderer.java
++++ b/app/src/main/java/io/agora/tutorials/helper/CustomizedCameraRenderer.java
+@@ -96,8 +96,7 @@ public class CustomizedCameraRenderer extends GLSurfaceView implements
+ 
+     private Camera mCamera;
+ 
+-    //private int mCameraIndex = Camera.CameraInfo.CAMERA_FACING_BACK;
+-    private int mCameraIndex = Camera.CameraInfo.CAMERA_FACING_FRONT;
++    private int mCameraIndex = Camera.CameraInfo.CAMERA_FACING_BACK;
+     // mount angle, 270 degrees; back: 90 degrees
+     // content: back camera's top row is aligned to left bar; front camera's top row is aligned to right bar
+     // counter-clock wise
+diff --git a/app/src/main/res/values/strings.xml b/app/src/main/res/values/strings.xml
+index 7c53e44..fdc0f5b 100644
+--- a/app/src/main/res/values/strings.xml
++++ b/app/src/main/res/values/strings.xml
+@@ -7,5 +7,5 @@
+     <!-- For formal released project, please use Dynamic Key
+         http://docs.agora.io/en/user_guide/Component_and_Others/Dynamic_Key_User_Guide.html -->
+     <!-- Tutorial Step 1 -->
+-    <string name="agora_app_id">82e4d31885164cf8bc834611b4972e68</string>
++    <string name="agora_app_id"><#YOUR APP ID#></string>
+ </resources>
