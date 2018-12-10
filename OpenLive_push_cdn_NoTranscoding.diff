@@ -70,11 +70,10 @@ index 8cf4c1e..ac12deb 100644
 +    self.isPublishCDN = !self.isPublishCDN;
 +    if(self.isPublishCDN) {
 +        [self.rtcEngine addPublishStreamUrl:@"rtmp://vid-218.push.xxx/live/qaz" transcodingEnabled:false];
-+        NSLog(@"ffplay %@",@"rtmp://vid-218.pull.chinanetcenter.broadcastapp.agora.io/live/qaz");
 +        [sender setTitle:@"removePublishStreamUrl" forState:UIControlStateNormal];
 +    } else {
 +        [self.rtcEngine removePublishStreamUrl:@"rtmp://vid-218.push.xxx/live/qaz"];
-+        [sender setTitle:@"addPublishStreamUrl" forState:UIControlStateNormal];
++        [sender setTitle:@"removePublishStreamUrl" forState:UIControlStateNormal];
 +    }
 +}
 +
