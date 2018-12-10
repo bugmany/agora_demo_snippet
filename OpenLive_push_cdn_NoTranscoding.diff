@@ -1,0 +1,110 @@
+diff --git a/OpenLive-iOS-Objective-C/OpenLive/LiveRoomViewController.m b/OpenLive-iOS-Objective-C/OpenLive/LiveRoomViewController.m
+index 8cf4c1e..ac12deb 100644
+--- a/OpenLive-iOS-Objective-C/OpenLive/LiveRoomViewController.m
++++ b/OpenLive-iOS-Objective-C/OpenLive/LiveRoomViewController.m
+@@ -10,6 +10,7 @@
+ #import "VideoSession.h"
+ #import "VideoViewLayouter.h"
+ #import "KeyCenter.h"
++#import "AGVideoPreProcessing.h"
+ 
+ @interface LiveRoomViewController () <AgoraRtcEngineDelegate>
+ @property (weak, nonatomic) IBOutlet UILabel *roomNameLabel;
+@@ -22,6 +23,8 @@ @interface LiveRoomViewController () <AgoraRtcEngineDelegate>
+ @property (strong, nonatomic) AgoraRtcEngineKit *rtcEngine;
+ @property (assign, nonatomic) BOOL isBroadcaster;
+ @property (assign, nonatomic) BOOL isMuted;
++@property (assign, nonatomic) BOOL isMirror;
++@property (assign, nonatomic) BOOL isPublishCDN;
+ @property (assign, nonatomic) BOOL shouldEnhancer;
+ @property (strong, nonatomic) NSMutableArray<VideoSession *> *videoSessions;
+ @property (strong, nonatomic) VideoSession *fullSession;
+@@ -51,6 +54,7 @@ - (void)setClientRole:(AgoraClientRole)clientRole {
+ 
+ - (void)setIsMuted:(BOOL)isMuted {
+     _isMuted = isMuted;
++
+     [self.rtcEngine muteLocalAudioStream:isMuted];
+     [self.audioMuteButton setImage:[UIImage imageNamed:(isMuted ? @"btn_mute_cancel" : @"btn_mute")] forState:UIControlStateNormal];
+ }
+@@ -77,6 +81,17 @@ - (void)viewDidLoad {
+     [self updateButtonsVisiablity];
+     
+     [self loadAgoraKit];
++    //add by longxin
++    //[self.rtcEngine setParameters:@"{\"rtc.log_filter\":65535}"];
++//    [self.rtcEngine setLogFilter:65535];
++    [self.rtcEngine setLogFilter:AgoraLogFilterDebug];
++    //获取Caches路径
++    NSArray *paths = NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES);
++    NSString *sdkLogPath = [NSString stringWithFormat:@"%@%@" , [paths objectAtIndex:0] ,@"/AgoraSdkLog.log"];
++    //[paths objectAtIndex:0];
++    NSLog(@"path：%@", sdkLogPath);
++    [self.rtcEngine setLogFile:sdkLogPath];
++//add by longxin
+ }
+ 
+ - (IBAction)doSwitchCameraPressed:(UIButton *)sender {
+@@ -122,6 +137,45 @@ - (void)updateButtonsVisiablity {
+         button.hidden = !self.isBroadcaster;
+     }
+ }
++//add by longxin
++- (IBAction)mirrorRemoteVideo:(UIButton *)sender {
++    self.isMirror = !self.isMirror;
++    [self.rtcEngine setParameters:@"{\"che.video.local.render\":false}"];
++    if (self.isMirror) {
++        [self.rtcEngine setLocalVideoMirrorMode:AgoraVideoMirrorModeDisabled];
++        [AGVideoPreProcessing setMirrorVideo:YES];
++        [sender setTitle:@"mirror" forState:UIControlStateNormal];
++    }
++    else {
++        [self.rtcEngine setLocalVideoMirrorMode:AgoraVideoMirrorModeEnabled];
++        [AGVideoPreProcessing setMirrorVideo:NO];
++        [sender setTitle:@"unmirror" forState:UIControlStateNormal];
++    }
++    [self.rtcEngine setParameters:@"{\"che.video.local.render\":true}"];
++}
++
++- (IBAction)publishToCDN:(id)sender {
++    self.isPublishCDN = !self.isPublishCDN;
++    if(self.isPublishCDN) {
++        [self.rtcEngine addPublishStreamUrl:@"rtmp://vid-218.push.chinanetcenter.broadcastapp.agora.io/live/qaz" transcodingEnabled:false];
++        NSLog(@"ffplay %@",@"rtmp://vid-218.pull.chinanetcenter.broadcastapp.agora.io/live/qaz");
++        [sender setTitle:@"removePublishStreamUrl" forState:UIControlStateNormal];
++    } else {
++        [self.rtcEngine removePublishStreamUrl:@"rtmp://vid-218.push.chinanetcenter.broadcastapp.agora.io/live/qaz"];
++        [sender setTitle:@"addPublishStreamUrl" forState:UIControlStateNormal];
++    }
++}
++
++- (void) rtcEngine:(AgoraRtcEngineKit *) engine streamPublishedWithUrl:(NSString * _Nonnull)url errorCode:(AgoraErrorCode)errorCode {
++    NSLog(@"Stream published  with url: %@",url);
++    NSLog(@"error %ld" , errorCode);
++}
++
++- (void)rtcEngine:(AgoraRtcEngineKit *)engine streamUnpublishedWithUrl:(NSString *)url{
++    NSLog(@"Stream unpulished with url : %@",url);
++}
++
++//add by longxin
+ 
+ - (void)leaveChannel {
+     [self setIdleTimerActive:YES];
+@@ -132,6 +186,8 @@ - (void)leaveChannel {
+         [self.rtcEngine stopPreview];
+     }
+     
++    [AGVideoPreProcessing deregisterVideoPreprocessing:self.rtcEngine];
++
+     for (VideoSession *session in self.videoSessions) {
+         [session.hostingView removeFromSuperview];
+     }
+@@ -222,6 +278,7 @@ - (VideoSession *)videoSessionOfUid:(NSUInteger)uid {
+ //MARK: - Agora Media SDK
+ - (void)loadAgoraKit {
+     self.rtcEngine = [AgoraRtcEngineKit sharedEngineWithAppId:[KeyCenter AppId] delegate:self];
++    [AGVideoPreProcessing registerVideoPreprocessing:self.rtcEngine];
+     [self.rtcEngine setChannelProfile:AgoraChannelProfileLiveBroadcasting];
+     [self.rtcEngine enableDualStreamMode:YES];
+     [self.rtcEngine enableVideo];
