@@ -1,0 +1,106 @@
+diff --git a/OpenLive/LiveRoomViewController.m b/OpenLive/LiveRoomViewController.m
+index 8cf4c1e..8549a10 100644
+--- a/OpenLive/LiveRoomViewController.m
++++ b/OpenLive/LiveRoomViewController.m
+@@ -10,7 +10,10 @@
+ #import "VideoSession.h"
+ #import "VideoViewLayouter.h"
+ #import "KeyCenter.h"
+-
++//add by longxin
++#define PublishWidth 1280
++#define PublishHeight 720
++//add by longxin
+ @interface LiveRoomViewController () <AgoraRtcEngineDelegate>
+ @property (weak, nonatomic) IBOutlet UILabel *roomNameLabel;
+ @property (weak, nonatomic) IBOutlet UIView *remoteContainerView;
+@@ -26,6 +29,11 @@ @interface LiveRoomViewController () <AgoraRtcEngineDelegate>
+ @property (strong, nonatomic) NSMutableArray<VideoSession *> *videoSessions;
+ @property (strong, nonatomic) VideoSession *fullSession;
+ @property (strong, nonatomic) VideoViewLayouter *viewLayouter;
++//add by longxin
++@property (strong, nonatomic) NSString *publishUrl;
++@property (strong, nonatomic) AgoraLiveTranscoding *agoraLiveTranscoding;
++@property (strong, nonatomic) NSMutableArray<AgoraLiveTranscodingUser *> *users;
++//add by longxin
+ @end
+ 
+ @implementation LiveRoomViewController
+@@ -233,7 +241,14 @@ - (void)loadAgoraKit {
+     }
+     
+     [self addLocalSession];
+-    
++    //add by longxin
++    //test heaac_2ch
++    //[self.rtcEngine setParameters:@"{\"che.audio.specify.codec\":\"HEAAC_2ch\"}"];
++    //test token
++//    int code = [self.rtcEngine joinChannelByToken:@"006c7ad348686e944d5b24d5259f7e2edd9IADNIWj64tecxKGsfZEP9ycuvcxlv9NZUOco0/GCH64Wm7EZRGZ28xgYIgBNVO8BbokHXAQAAQBTiSxhAgBTiSxhAwBTiSxhBABTiSxh"
++//                                        channelId:@"qaz" info:nil uid:111111 joinSuccess:nil];
++    //add by longxin
++    [self.rtcEngine disableVideo];
+     int code = [self.rtcEngine joinChannelByToken:nil channelId:self.roomName info:nil uid:0 joinSuccess:nil];
+     if (code == 0) {
+         [self setIdleTimerActive:NO];
+@@ -248,6 +263,52 @@ - (void)loadAgoraKit {
+     }
+ }
+ 
++//add by longxin
++//test audioonly push cdn
++- (void)rtcEngine:(AgoraRtcEngineKit *)engine didJoinChannel:(NSString *)channel withUid:(NSUInteger)uid elapsed:(NSInteger)elapsed {
++
++    // add publish url with transcoding
++    AgoraLiveTranscodingUser *user = [[AgoraLiveTranscodingUser alloc] init];
++    user.uid = uid;
++    user.alpha = 1.0;
++    user.zOrder = 1;
++    user.audioChannel = 0;
++//    user.rect = CGRectMake(0, 0, 16, 16);
++
++    self.users = [[NSMutableArray alloc] init];
++    [self.users addObject:user];
++
++    self.agoraLiveTranscoding = [[AgoraLiveTranscoding alloc] init];
++    self.agoraLiveTranscoding.transcodingUsers = self.users;
++    self.agoraLiveTranscoding.size = CGSizeMake(16, 16);
++    self.agoraLiveTranscoding.videoBitrate = 1;
++    self.agoraLiveTranscoding.audioChannels = 1;
++
++    [self.rtcEngine setLiveTranscoding:self.agoraLiveTranscoding];
++
++    NSString *pushUrlString = [NSString stringWithFormat:@"%@%ld",@"rtmp://xxx.push/live/",uid];
++    NSString *pullUrlString = [NSString stringWithFormat:@"%@%ld",@"rtmp://xxx.pull/live/",uid];
++
++    self.publishUrl = pushUrlString;
++    NSLog(@"ffplay %@",pullUrlString);
++
++    [self.rtcEngine addPublishStreamUrl:self.publishUrl transcodingEnabled:YES];
++    // add publish url with transcoding
++}
++
++// publish call back
++- (void)rtcEngine:(AgoraRtcEngineKit *)engine streamPublishedWithUrl:(NSString *)url errorCode:(AgoraErrorCode)errorCode {
++    NSLog(@"Stream Published With Url: %@", url);
++    NSLog(@"error %ld", (long)errorCode);
++}
++
++- (void)rtcEngine:(AgoraRtcEngineKit *)engine streamUnpublishedWithUrl:(NSString *)url {
++    NSLog(@"Stream Unpublished With Url: %@", url);
++}
++// publish call back
++
++//add by longxin
++
+ - (void)rtcEngine:(AgoraRtcEngineKit *)engine didJoinedOfUid:(NSUInteger)uid elapsed:(NSInteger)elapsed {
+     VideoSession *userSession = [self videoSessionOfUid:uid];
+     [self.rtcEngine setupRemoteVideo:userSession.canvas];
+@@ -266,7 +327,7 @@ - (void)rtcEngine:(AgoraRtcEngineKit *)engine didOfflineOfUid:(NSUInteger)uid re
+             deleteSession = session;
+         }
+     }
+-    
++
+     if (deleteSession) {
+         [self.videoSessions removeObject:deleteSession];
+         [deleteSession.hostingView removeFromSuperview];
