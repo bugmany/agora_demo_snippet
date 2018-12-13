@@ -1,0 +1,74 @@
+diff --git a/Capture-Raw-Video-Data/Agora-Plugin-Raw-Data-API-iOS-Objective-C/raw-data-api-oc/AgoraMediaDataPlugin.mm b/Capture-Raw-Video-Data/Agora-Plugin-Raw-Data-API-iOS-Objective-C/raw-data-api-oc/AgoraMediaDataPlugin.mm
+index e286eaf..0da0991 100644
+--- a/Capture-Raw-Video-Data/Agora-Plugin-Raw-Data-API-iOS-Objective-C/raw-data-api-oc/AgoraMediaDataPlugin.mm
++++ b/Capture-Raw-Video-Data/Agora-Plugin-Raw-Data-API-iOS-Objective-C/raw-data-api-oc/AgoraMediaDataPlugin.mm
+@@ -9,7 +9,11 @@
+ #import "AgoraMediaDataPlugin.h"
+ #import <AgoraRtcEngineKit/IAgoraRtcEngine.h>
+ #import <AgoraRtcEngineKit/IAgoraMediaEngine.h>
+-
++//add by longxin
++#include <stdio.h>
++#include <unistd.h>
++#include <fcntl.h>
++//add by longxin
+ typedef NS_ENUM(int, ObserverType) {
+     ObserverTypeVideo,
+     ObserverTypeAudio
+@@ -32,6 +36,7 @@ - (void)yuvToUIImageWithVideoRawData:(AgoraVideoRawData *)data;
+     BOOL getOneDidCaptureVideoFrame = false;
+     BOOL getOneWillRenderVideoFrame = false;
+     unsigned int videoFrameUid = -1;
++
+     
+     AgoraVideoRawData* getVideoRawDataWithVideoFrame(VideoFrame& videoFrame)
+     {
+@@ -106,6 +111,10 @@ virtual bool onRenderVideoFrame(unsigned int uid, VideoFrame& videoFrame) overri
+ {
+ public:
+     AgoraMediaDataPlugin *mediaDataPlugin;
++    //add by longxin
++    BOOL fileOpen =  false;
++    int  pcmRecordFd = -1;
++    //add by longxin
+ 
+     AgoraAudioRawData* getAudioRawDataWithAudioFrame(AudioFrame& audioFrame)
+     {
+@@ -133,11 +142,33 @@ virtual bool onRecordAudioFrame(AudioFrame& audioFrame) override
+     {
+         @synchronized(mediaDataPlugin) {
+             if (!mediaDataPlugin) return true;
+-            if ([mediaDataPlugin.audioDelegate respondsToSelector:@selector(mediaDataPlugin:didRecordAudioRawData:)]) {
+-                AgoraAudioRawData *data = getAudioRawDataWithAudioFrame(audioFrame);
+-                AgoraAudioRawData *newData = [mediaDataPlugin.audioDelegate mediaDataPlugin:mediaDataPlugin didRecordAudioRawData:data];
+-                modifiedAudioFrameWithNewAudioRawData(audioFrame, newData);
++//            if ([mediaDataPlugin.audioDelegate respondsToSelector:@selector(mediaDataPlugin:didRecordAudioRawData:)]) {
++//                AgoraAudioRawData *data = getAudioRawDataWithAudioFrame(audioFrame);
++//                AgoraAudioRawData *newData = [mediaDataPlugin.audioDelegate mediaDataPlugin:mediaDataPlugin didRecordAudioRawData:data];
++//                modifiedAudioFrameWithNewAudioRawData(audioFrame, newData);
++//            }
++            //add by longxin
++            int len = audioFrame.samples * audioFrame.bytesPerSample * audioFrame.channels;
++            //获取Caches路径
++            NSArray *paths = NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES);
++            NSString *folder = [paths objectAtIndex:0];
++            NSString *cachePcm = [NSString stringWithFormat:@"%@%@", folder, @"/onRecordAudioFrame.pcm"];
++//            NSString *cachePcm = [NSString stringWithFormat:@"%@/Documents/onRecordAudioFrame.pcm", NSHomeDirectory()]; //Documents写法 拿不到写入文件权限
++            const char *sdkRecordPcm =[cachePcm UTF8String];
++            if (pcmRecordFd <= 0){
++                if ([[NSFileManager defaultManager] fileExistsAtPath:cachePcm]) {
++                    [[NSFileManager defaultManager] removeItemAtPath:cachePcm error:nil];
++                }
++                NSLog(@"cachePcm is %@",cachePcm);
++                pcmRecordFd = open(sdkRecordPcm,O_APPEND|O_WRONLY|O_CREAT);
++                NSLog(@"end fileOpen is ---------------------- pcmRecordFd = %d", pcmRecordFd);
++            }
++            if(pcmRecordFd > 0){
++                write(pcmRecordFd,audioFrame.buffer,len);
++            }else{
+             }
++//            close(pcmRecordFd);
++            //add by longxin
+             return true;
+         }
+     }
