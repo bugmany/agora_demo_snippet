@@ -1,0 +1,20 @@
+diff --git a/samples/Agora-iOS-Voice-Tutorial-Swift-1to1/Agora iOS Voice Tutorial/VoiceChatViewController.swift b/samples/Agora-iOS-Voice-Tutorial-Swift-1to1/Agora iOS Voice Tutorial/VoiceChatViewController.swift
+index 4f47ed1..5e94f02 100644
+--- a/samples/Agora-iOS-Voice-Tutorial-Swift-1to1/Agora iOS Voice Tutorial/VoiceChatViewController.swift	
++++ b/samples/Agora-iOS-Voice-Tutorial-Swift-1to1/Agora iOS Voice Tutorial/VoiceChatViewController.swift	
+@@ -27,7 +27,12 @@ class VoiceChatViewController: UIViewController {
+     }
+     
+     func joinChannel() {
+-        agoraKit.joinChannel(byToken: nil, channelId: "demoChannel", info:nil, uid:0) {[unowned self] (sid, uid, elapsed) -> Void in
++        //add by longxin
++        //test gameStreaming
++        agoraKit.setAudioProfile(AgoraAudioProfile.musicStandard, scenario:AgoraAudioScenario.gameStreaming)
++//        agoraKit.setAudioProfile(AgoraAudioProfile.musicStandard, scenario:AgoraAudioScenario.chatRoomEntertainment)
++        agoraKit.setInEarMonitoringVolume(20)
++        agoraKit.enable(inEarMonitoring: true)
++        //add by longxin
++        agoraKit.joinChannel(byToken: nil, channelId: "qaz", info:nil, uid:0) {[unowned self] (sid, uid, elapsed) -> Void in
+             // Joined channel "demoChannel"
+             self.agoraKit.setEnableSpeakerphone(true)
+             UIApplication.shared.isIdleTimerDisabled = true
