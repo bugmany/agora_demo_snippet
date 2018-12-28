@@ -1,0 +1,621 @@
+diff --git a/Custom-Media-Device/Agora-Custom-Media-Device-Android/app/src/main/java/io/agora/rtc/mediaio/app/shareScreen/source/AgoraTextureRecord.java b/Custom-Media-Device/Agora-Custom-Media-Device-Android/app/src/main/java/io/agora/rtc/mediaio/app/shareScreen/source/AgoraTextureRecord.java
+index b4b93db..d58093e 100644
+--- a/Custom-Media-Device/Agora-Custom-Media-Device-Android/app/src/main/java/io/agora/rtc/mediaio/app/shareScreen/source/AgoraTextureRecord.java
++++ b/Custom-Media-Device/Agora-Custom-Media-Device-Android/app/src/main/java/io/agora/rtc/mediaio/app/shareScreen/source/AgoraTextureRecord.java
+@@ -24,6 +24,7 @@ public class AgoraTextureRecord extends TextureSource {
+ 
+     private VirtualDisplay virtualDisplay;
+     private MediaProjection mediaProjection;
++    private long mLastFrameTs;
+ 
+     public AgoraTextureRecord(Context context, int width, int height, int dpi, MediaProjection mediaProjection) {
+         super(null, width, height);
+@@ -39,6 +40,15 @@ public class AgoraTextureRecord extends TextureSource {
+     public void onTextureFrameAvailable(int oesTextureId, float[] transformMatrix, long timestampNs) {
+         super.onTextureFrameAvailable(oesTextureId, transformMatrix, timestampNs);
+         if (mConsumer != null && mConsumer.get() != null) {
++
++            long now=System.currentTimeMillis();
++
++            long gap=now-mLastFrameTs;
++            if(gap<10000){
++                Log.e(TAG,"frame callback fps:"+1000f/gap);
++            }
++            mLastFrameTs=now;
++            android.util.Log.v("longxin","mLastFrameTs:"+mLastFrameTs);
+             mConsumer.get().consumeTextureFrame(oesTextureId, TEXTURE_OES.intValue(), mWidth, mHeight, rotation, System.currentTimeMillis(), transformMatrix);
+         }
+     }
+diff --git a/Screensharing/Agora-Screen-Sharing-Android/app/src/main/java/io/agora/rtc/ss/app/AudienceActivity.java b/Screensharing/Agora-Screen-Sharing-Android/app/src/main/java/io/agora/rtc/ss/app/AudienceActivity.java
+index 5be3e6a..08e7c9b 100644
+--- a/Screensharing/Agora-Screen-Sharing-Android/app/src/main/java/io/agora/rtc/ss/app/AudienceActivity.java
++++ b/Screensharing/Agora-Screen-Sharing-Android/app/src/main/java/io/agora/rtc/ss/app/AudienceActivity.java
+@@ -58,7 +58,7 @@ public class AudienceActivity extends Activity {
+         mRtcEngine.enableVideo();
+         mRtcEngine.setClientRole(Constants.CLIENT_ROLE_AUDIENCE);
+ 
+-        mRtcEngine.joinChannel(null, "ss_test", "", 0);
++        mRtcEngine.joinChannel(null, "qaz", "", 0);
+     }
+ 
+     private void setupRemoteView(int uid) {
+@@ -66,8 +66,10 @@ public class AudienceActivity extends Activity {
+         surfaceV.setZOrderOnTop(true);
+         surfaceV.setZOrderMediaOverlay(true);
+         mFlRoot.addView(surfaceV, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+-
+-        mRtcEngine.setupRemoteVideo(new VideoCanvas(surfaceV, VideoCanvas.RENDER_MODE_HIDDEN, uid));
++//add by longxin
++        //mRtcEngine.setupRemoteVideo(new VideoCanvas(surfaceV, VideoCanvas.RENDER_MODE_HIDDEN, uid));
++        mRtcEngine.setupRemoteVideo(new VideoCanvas(surfaceV, VideoCanvas.RENDER_MODE_FIT, uid));
++//add by longxin
+     }
+ 
+     @Override
+diff --git a/Screensharing/Agora-Screen-Sharing-Android/app/src/main/java/io/agora/rtc/ss/app/HelloAgoraScreenSharingActivity.java b/Screensharing/Agora-Screen-Sharing-Android/app/src/main/java/io/agora/rtc/ss/app/HelloAgoraScreenSharingActivity.java
+index 87bd035..537d20f 100644
+--- a/Screensharing/Agora-Screen-Sharing-Android/app/src/main/java/io/agora/rtc/ss/app/HelloAgoraScreenSharingActivity.java
++++ b/Screensharing/Agora-Screen-Sharing-Android/app/src/main/java/io/agora/rtc/ss/app/HelloAgoraScreenSharingActivity.java
+@@ -2,20 +2,29 @@ package io.agora.rtc.ss.app;
+ 
+ import android.Manifest;
+ import android.app.Activity;
++import android.content.BroadcastReceiver;
+ import android.content.Context;
++import android.content.Intent;
++import android.content.IntentFilter;
+ import android.content.pm.PackageManager;
++import android.content.res.Configuration;
++import android.hardware.SensorManager;
+ import android.os.Bundle;
+ import android.support.annotation.NonNull;
+ import android.support.v4.app.ActivityCompat;
+ import android.support.v4.content.ContextCompat;
+ import android.util.DisplayMetrics;
+ import android.util.Log;
++import android.view.OrientationEventListener;
+ import android.view.View;
+ import android.view.WindowManager;
+ import android.widget.Button;
+ import android.widget.TextView;
+ import android.widget.Toast;
+ 
++import java.util.Arrays;
++
++import agora.conversion.openGlBase.gles.VaryTools;
+ import io.agora.rtc.Constants;
+ import io.agora.rtc.IRtcEngineEventHandler;
+ import io.agora.rtc.RtcEngine;
+@@ -24,6 +33,8 @@ import io.agora.rtc.ss.ImgTexFrame;
+ import io.agora.rtc.ss.SinkConnector;
+ import io.agora.rtc.ss.capture.ScreenCapture;
+ import io.agora.rtc.video.AgoraVideoFrame;
++import io.agora.rtc.video.VideoEncoderConfiguration;
++import agora.conversion.TextureMovieEncoder;
+ 
+ public class HelloAgoraScreenSharingActivity extends Activity {
+ 
+@@ -35,8 +46,62 @@ public class HelloAgoraScreenSharingActivity extends Activity {
+     private GLRender mScreenGLRender;
+ 
+     private RtcEngine mRtcEngine;
+-
++    OrientationEventListener mOrientationListener;
+     private boolean mIsLandSpace = false;
++    private long mLastFrameTs;
++//add by longxin
++    private IRtcEngineEventHandler mIRtcEnventHandler = new IRtcEngineEventHandler() {
++                @Override
++                public void onError(int err) {
++                    super.onError(err);
++                }
++
++                @Override
++                public void onStreamPublished(String url, int error) {
++                    super.onStreamPublished(url, error);
++                    android.util.Log.v("longxin","onStreamPublished");
++                }
++
++                @Override
++                public void onStreamUnpublished(String url) {
++                    super.onStreamUnpublished(url);
++//                    android.util.Log.v("longxin","onStreamUnpublished");
++                }
++
++                @Override
++                public void onClientRoleChanged(int oldRole, int newRole) {
++                    super.onClientRoleChanged(oldRole, newRole);
++//                    android.util.Log.v("longxin","onClientRoleChanged");
++                }
++
++		        @Override
++		        public void onJoinChannelSuccess(String channel, int uid, int elapsed) {
++                    mRtcEngine.addPublishStreamUrl("rtmp://vid-218.push.chinanetcenter.broadcastapp.agora.io/live/qaz"+uid,false);
++//                    android.util.Log.v("longxin","onJoinChannelSuccess");
++                    android.util.Log.v("longxin","ffplay "+"rtmp://vid-218.pull.chinanetcenter.broadcastapp.agora.io/live/qaz"+uid);
++                }
++	};
++//add by longxin
++    class MyBroadcastReceive extends BroadcastReceiver
++    {
++        @Override
++        public void onReceive(Context arg0, Intent arg1) {
++            // TODO Auto-generated method stub
++
++            String action = arg1.getAction();
++            if("android.intent.action.CONFIGURATION_CHANGED".equals(action)) {
++                android.util.Log.v("longxin","CONFIGURATION_CHANGED");
++            }
++            if(Intent.ACTION_TIME_TICK.equals(action)){
++                android.util.Log.v("longxin","ACTION_TIME_TICK");
++            }else if(Intent.ACTION_TIME_CHANGED.equals(action)){
++                android.util.Log.v("longxin","ACTION_TIME_CHANGED");
++            }
++
++            android.util.Log.v("longxin","totation:" +(getWindowManager().getDefaultDisplay().getRotation()));
++        }
++    }
++//add by longxin
+ 
+     private void initModules() {
+         DisplayMetrics metrics = new DisplayMetrics();
+@@ -68,10 +133,34 @@ public class HelloAgoraScreenSharingActivity extends Activity {
+                 vf.timeStamp = frame.pts;
+                 vf.stride = frame.mFormat.mWidth;
+                 vf.height = frame.mFormat.mHeight;
++                long now=System.currentTimeMillis();
++                long gap=now-mLastFrameTs;
++                if(gap<10000){
++                    android.util.Log.v("_fps","frame callback fps:"+1000f/gap);
++//                    android.util.Log.v("longxin","mLastFrameTs:"+mLastFrameTs);
++//                    android.util.Log.v("longxin","vf.stride:"+vf.stride+" vf.height:"+vf.height);
++                 }
++                 mLastFrameTs=now;
+                 vf.textureID = frame.mTextureId;
+                 vf.syncMode = true;
+                 vf.eglContext14 = mScreenGLRender.getEGLContext();
+-                vf.transform = frame.mTexMatrix;
++				//add by longxin
++
++
++                if(isLANDSCAPE){
++                    vf.transform = frame.mTexMatrix;
++                }else{
++                    VaryTools varyTools = new VaryTools();
++                    varyTools.translate(0.5f,0.5f,0);
++                    varyTools.scale(3f,3f,1f);
++                    varyTools.rotate(180,0,0,1);
++                    varyTools.rotate(180,0,1,0);
++                    varyTools.translate(-0.5f,-0.5f,0);
++
++                    vf.transform = varyTools.getFinalMatrix();
++                }
++
++				//add by longxin
+ 
+                 mRtcEngine.pushExternalVideoFrame(vf);
+             }
+@@ -109,27 +198,9 @@ public class HelloAgoraScreenSharingActivity extends Activity {
+ 
+         if (mRtcEngine == null) {
+             try {
+-                mRtcEngine = RtcEngine.create(getApplicationContext(), getString(R.string.agora_app_id), new IRtcEngineEventHandler() {
+-                    @Override
+-                    public void onJoinChannelSuccess(String channel, int uid, int elapsed) {
+-                        Log.d(LOG_TAG, "onJoinChannelSuccess " + channel + " " + elapsed);
+-                    }
+-
+-                    @Override
+-                    public void onWarning(int warn) {
+-                        Log.d(LOG_TAG, "onWarning " + warn);
+-                    }
+-
+-                    @Override
+-                    public void onError(int err) {
+-                        Log.d(LOG_TAG, "onError " + err);
+-                    }
+-
+-                    @Override
+-                    public void onAudioRouteChanged(int routing) {
+-                        Log.d(LOG_TAG, "onAudioRouteChanged " + routing);
+-                    }
+-                });
++                //adjust by longxin
++                mRtcEngine = RtcEngine.create(getApplicationContext(), getString(R.string.agora_app_id), mIRtcEnventHandler);
++                //adjust by longxin
+             } catch (Exception e) {
+                 Log.e(LOG_TAG, Log.getStackTraceString(e));
+ 
+@@ -144,9 +215,34 @@ public class HelloAgoraScreenSharingActivity extends Activity {
+             } else {
+                 throw new RuntimeException("Can not work on device do not supporting texture" + mRtcEngine.isTextureEncodeSupported());
+             }
++//add by longxin
++//            mRtcEngine.setVideoEncoderConfiguration(new VideoEncoderConfiguration(VideoEncoderConfiguration.VD_640x360,
++//                    VideoEncoderConfiguration.FRAME_RATE.FRAME_RATE_FPS_15,
++//                    600, VideoEncoderConfiguration.ORIENTATION_MODE.ORIENTATION_MODE_FIXED_LANDSCAPE));
++
++//            mRtcEngine.setVideoEncoderConfiguration(new VideoEncoderConfiguration(VideoEncoderConfiguration.VD_640x360,
++//                    VideoEncoderConfiguration.FRAME_RATE.FRAME_RATE_FPS_15,
++//                    600, VideoEncoderConfiguration.ORIENTATION_MODE.ORIENTATION_MODE_FIXED_PORTRAIT));
++
++//            mRtcEngine.setVideoEncoderConfiguration(new VideoEncoderConfiguration(VideoEncoderConfiguration.VD_640x360,
++//                    VideoEncoderConfiguration.FRAME_RATE.FRAME_RATE_FPS_15,
++//                    600, VideoEncoderConfiguration.ORIENTATION_MODE.ORIENTATION_MODE_ADAPTIVE));
+ 
+-            mRtcEngine.setVideoProfile(Constants.VIDEO_PROFILE_360P, true);
+ 
++//            mRtcEngine.setVideoEncoderConfiguration(new VideoEncoderConfiguration(VideoEncoderConfiguration.VD_1280x720,
++//                    VideoEncoderConfiguration.FRAME_RATE.FRAME_RATE_FPS_30,
++//                    3420, VideoEncoderConfiguration.ORIENTATION_MODE.ORIENTATION_MODE_FIXED_LANDSCAPE));
++
++//            mRtcEngine.setVideoEncoderConfiguration(new VideoEncoderConfiguration(VideoEncoderConfiguration.VD_1280x720,
++//                    VideoEncoderConfiguration.FRAME_RATE.FRAME_RATE_FPS_30,
++//                    3420, VideoEncoderConfiguration.ORIENTATION_MODE.ORIENTATION_MODE_FIXED_PORTRAIT));
++//
++            mRtcEngine.setVideoEncoderConfiguration(new VideoEncoderConfiguration(540,960,
++                    VideoEncoderConfiguration.FRAME_RATE.FRAME_RATE_FPS_15,
++                    1200, VideoEncoderConfiguration.ORIENTATION_MODE.ORIENTATION_MODE_FIXED_LANDSCAPE));
++
++
++//add by longxin
+             mRtcEngine.setClientRole(Constants.CLIENT_ROLE_BROADCASTER);
+         }
+     }
+@@ -189,14 +285,82 @@ public class HelloAgoraScreenSharingActivity extends Activity {
+         mScreenCapture.stop();
+     }
+ 
++//add by longxin
++    private boolean isLANDSCAPE = false;
++    private MyBroadcastReceive broadcastReceive;
++	//add by longxin
+     @Override
+     protected void onCreate(Bundle savedInstanceState) {
+         super.onCreate(savedInstanceState);
+         setContentView(R.layout.activity_hello_agora_screen_sharing);
+ 
+         checkSelfPermission(Manifest.permission.RECORD_AUDIO, PERMISSION_REQ_ID_RECORD_AUDIO);
++		//add by longxin
++        mOrientationListener = new OrientationEventListener(this,
++                SensorManager.SENSOR_DELAY_NORMAL) {
++
++            @Override
++            public void onOrientationChanged(int orientation) {
++//                android.util.Log.v("longxin","orientation:"+orientation);
++//                if(orientation>180){
++//                    orientation = orientation -180;
++//                }
++
++                if((orientation == 0 || orientation == 180)){
++                    if(mRtcEngine==null)
++                        return;
++//                    android.util.Log.v("longxin","change orientation PORTRAIT");
++                    isLANDSCAPE = false;
++                }else if ((orientation == 270 || orientation == 90)){
++                    if(mRtcEngine==null)
++                        return;
++//                    android.util.Log.v("longxin","change orientation LANDSCAPE");
++                    isLANDSCAPE = true;
++
++                }
++
++            }
++        };
++
++        if (mOrientationListener.canDetectOrientation()) {
++            android.util.Log.v("longxin","Can detect orientation");
++            mOrientationListener.enable();
++        } else {
++            android.util.Log.v("longxin","Cannot detect orientation");
++            mOrientationListener.disable();
++        }
++
++        broadcastReceive = new MyBroadcastReceive();
++//注册广播接收,注意：要监听这个系统广播就必须用这种方式来注册，不能再xml中注册，否则不能生效
++        IntentFilter filter = new IntentFilter();
++        filter.addAction(Intent.ACTION_CONFIGURATION_CHANGED);
++        filter.addAction(Intent.ACTION_TIME_TICK);
++        filter.addAction(Intent.ACTION_TIME_CHANGED);
++        registerReceiver(broadcastReceive,filter);
++        android.util.Log.v("longxin","registerReceiver");
+     }
+ 
++    private boolean isLandScape = false;
++    /**
++     * 屏幕旋转时调用此方法
++     */
++    @Override
++    public void onConfigurationChanged(Configuration newConfig) {
++        super.onConfigurationChanged(newConfig);
++        //newConfig.orientation获得当前屏幕状态是横向或者竖向
++        //Configuration.ORIENTATION_PORTRAIT 表示竖向
++        //Configuration.ORIENTATION_LANDSCAPE 表示横屏
++        if(newConfig.orientation==Configuration.ORIENTATION_PORTRAIT){
++            Log.i("TJY", "Can detect ORIENTATION_PORTRAIT");
++            isLandScape = false;
++        }
++        if(newConfig.orientation==Configuration.ORIENTATION_LANDSCAPE){
++            isLandScape = true;
++            Log.i("TJY", "Can detect ORIENTATION_LANDSCAPE");
++        }
++    }
++	//add by longxin
++
+     public void onLiveSharingScreenClicked(View view) {
+         if (!checkSelfPermission(Manifest.permission.RECORD_AUDIO, PERMISSION_REQ_ID_RECORD_AUDIO)) {
+             return;
+@@ -211,7 +375,7 @@ public class HelloAgoraScreenSharingActivity extends Activity {
+             startCapture();
+ 
+             String channel = "ss_test" + System.currentTimeMillis();
+-            channel = "ss_test";
++            channel = "qaz";
+ 
+             TextView tv = (TextView) findViewById(R.id.channel_name_info);
+             tv.setText(getString(R.string.label_channel_info, channel));
+@@ -225,7 +389,8 @@ public class HelloAgoraScreenSharingActivity extends Activity {
+             tv.setText(R.string.label_hello_agora);
+ 
+             button.setText(R.string.label_start_sharing_your_screen);
+-
++//            android.util.Log.v("longxin","removePublishStreamUrl");
++            //mRtcEngine.removePublishStreamUrl("rtmp://vid-218.push.chinanetcenter.broadcastapp.agora.io/live/qaz001");
+             mRtcEngine.leaveChannel();
+ 
+             stopCapture();
+@@ -276,7 +441,9 @@ public class HelloAgoraScreenSharingActivity extends Activity {
+     @Override
+     protected void onDestroy() {
+         super.onDestroy();
+-
++        //add by longxin
++        unregisterReceiver(broadcastReceive);
++		//add by longxin
+         deInitModules();
+     }
+ }
+diff --git a/Screensharing/Agora-Screen-Sharing-Android/app/src/main/java/io/agora/rtc/ss/app/MainActivity.java b/Screensharing/Agora-Screen-Sharing-Android/app/src/main/java/io/agora/rtc/ss/app/MainActivity.java
+index 732d3b9..b5e3184 100644
+--- a/Screensharing/Agora-Screen-Sharing-Android/app/src/main/java/io/agora/rtc/ss/app/MainActivity.java
++++ b/Screensharing/Agora-Screen-Sharing-Android/app/src/main/java/io/agora/rtc/ss/app/MainActivity.java
+@@ -4,6 +4,14 @@ import android.content.Intent;
+ import android.os.Bundle;
+ import android.app.Activity;
+ import android.view.View;
++//add by longxin
++import android.Manifest;
++import android.content.pm.PackageManager;
++import android.support.v4.app.ActivityCompat;
++import android.support.v4.content.ContextCompat;
++import android.support.annotation.NonNull;
++//add bylognxin
++
+ 
+ public class MainActivity extends Activity implements View.OnClickListener {
+ 
+@@ -12,6 +20,8 @@ public class MainActivity extends Activity implements View.OnClickListener {
+         super.onCreate(savedInstanceState);
+         setContentView(R.layout.activity_main);
+         initView();
++//        checkSelfPermissions();
++        checkSelfPermission(Manifest.permission.RECORD_AUDIO, ConstantApp.PERMISSION_REQ_ID_RECORD_AUDIO);
+     }
+ 
+     private void initView() {
+@@ -30,4 +40,70 @@ public class MainActivity extends Activity implements View.OnClickListener {
+             startActivity(i);
+         }
+     }
++
++    //add by longxin
++    private boolean checkSelfPermissions() {
++        return checkSelfPermission(Manifest.permission.RECORD_AUDIO, ConstantApp.PERMISSION_REQ_ID_RECORD_AUDIO) &&
++                checkSelfPermission(Manifest.permission.CAMERA, ConstantApp.PERMISSION_REQ_ID_CAMERA) &&
++                checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE, ConstantApp.PERMISSION_REQ_ID_WRITE_EXTERNAL_STORAGE);
++    }
++
++    public boolean checkSelfPermission(String permission, int requestCode) {
++
++        if (ContextCompat.checkSelfPermission(this,
++                permission)
++                != PackageManager.PERMISSION_GRANTED) {
++
++            ActivityCompat.requestPermissions(this,
++                    new String[]{permission},
++                    requestCode);
++            return false;
++        }
++
++        if (Manifest.permission.CAMERA.equals(permission)) {
++
++        }
++        return true;
++    }
++
++    @Override
++    public void onRequestPermissionsResult(int requestCode,
++                                           @NonNull String permissions[], @NonNull int[] grantResults) {
++
++        switch (requestCode) {
++            case ConstantApp.PERMISSION_REQ_ID_RECORD_AUDIO: {
++                if (grantResults.length > 0
++                        && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
++                    android.util.Log.v("longxin","get audio access");
++                    checkSelfPermission(Manifest.permission.CAMERA, ConstantApp.PERMISSION_REQ_ID_CAMERA);
++
++                } else {
++//                    finish();
++                }
++                break;
++            }
++            case ConstantApp.PERMISSION_REQ_ID_CAMERA: {
++                if (grantResults.length > 0
++                        && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
++                    android.util.Log.v("longxin","get camera access");
++                    checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE, ConstantApp.PERMISSION_REQ_ID_WRITE_EXTERNAL_STORAGE);
++
++                } else {
++//                    finish();
++                }
++                break;
++            }
++            case ConstantApp.PERMISSION_REQ_ID_WRITE_EXTERNAL_STORAGE: {
++                if (grantResults.length > 0
++                        && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
++                    android.util.Log.v("longxin","get WRITE_EXTERNAL_STORAGE access");
++                } else {
++//                    finish();
++                }
++                break;
++            }
++        }
++    }
++
++//add by longxin
+ }
+diff --git a/Screensharing/Agora-Screen-Sharing-Android/app/src/main/java/io/agora/rtc/ss/capture/ScreenCapture.java b/Screensharing/Agora-Screen-Sharing-Android/app/src/main/java/io/agora/rtc/ss/capture/ScreenCapture.java
+index 57732cc..1f8edbc 100644
+--- a/Screensharing/Agora-Screen-Sharing-Android/app/src/main/java/io/agora/rtc/ss/capture/ScreenCapture.java
++++ b/Screensharing/Agora-Screen-Sharing-Android/app/src/main/java/io/agora/rtc/ss/capture/ScreenCapture.java
+@@ -20,16 +20,25 @@ import android.util.Log;
+ import android.view.Surface;
+ import android.view.Window;
+ 
++import java.io.IOException;
+ import java.lang.ref.WeakReference;
++import java.util.Arrays;
+ import java.util.Locale;
+ import java.util.concurrent.atomic.AtomicInteger;
+ 
++
+ import io.agora.rtc.ss.GLRender;
+ import io.agora.rtc.ss.GlUtil;
+ import io.agora.rtc.ss.ImgTexFormat;
+ import io.agora.rtc.ss.ImgTexFrame;
+ import io.agora.rtc.ss.SrcConnector;
+ 
++//add by longxin
++import agora.conversion.TextureMovieEncoder;
++import java.io.File;
++import android.opengl.EGL14;
++//add by longxin
++
+ /**
+  * capture video frames from screen
+  */
+@@ -96,7 +105,11 @@ public class ScreenCapture implements SurfaceTexture.OnFrameAvailableListener {
+     // Performance trace
+     private long mLastTraceTime;
+     private long mFrameDrawed;
+-
++    //add by longxin
++    private TextureMovieEncoder mVideoEncoder = null;
++    private boolean isRecording = false;
++    private File mOutputFile = null;
++    //add by longxin
+     /**
+      * Source pin transfer ImgTexFrame, used for gpu path and preview
+      */
+@@ -124,14 +137,59 @@ public class ScreenCapture implements SurfaceTexture.OnFrameAvailableListener {
+             public void run() {
+                 if (mState.get() == SCREEN_STATE_CAPTURING) {
+                     mGLRender.requestRender();
+-                    mMainHandler.postDelayed(mFillFrameRunnable, 100);
++                    mMainHandler.postDelayed(mFillFrameRunnable, 30);
+                 }
+             }
+         };
+ 
+         initScreenSetupThread();
++//add by longxin
++//        android.util.Log.v("longxin","init TextureMovieEncoder");
++//        mVideoEncoder = new TextureMovieEncoder();
++//        createFile("/sdcard/screenshare_capture.mp4");
++
++        //add by longxin
+     }
+ 
++    //add by longxin
++
++    public  boolean createFile(String destFileName) {
++        mOutputFile  = new File(destFileName);
++        if(mOutputFile.exists()) {
++            android.util.Log.v("longxin","目标文件已存在" + destFileName + "，先删除");
++            mOutputFile.delete();
++        }
++        if (destFileName.endsWith(File.separator)) {
++            android.util.Log.v("longxin","创建单个文件" + destFileName + "失败，目标文件不能为目录！");
++            return false;
++        }
++        //判断目标文件所在的目录是否存在
++        if(!mOutputFile.getParentFile().exists()) {
++            //如果目标文件所在的目录不存在，则创建父目录
++            android.util.Log.v("longxin","目标文件所在目录不存在，准备创建它！");
++            if(!mOutputFile.getParentFile().mkdirs()) {
++                android.util.Log.v("longxin","创建目标文件所在目录失败！");
++                return false;
++            }
++        }
++        //创建目标文件
++        try {
++            if (mOutputFile.createNewFile()) {
++                android.util.Log.v("longxin","创建单个文件" + destFileName + "成功！");
++                return true;
++            } else {
++                android.util.Log.v("longxin","创建单个文件" + destFileName + "失败！");
++                return false;
++            }
++        } catch (IOException e) {
++            e.printStackTrace();
++            android.util.Log.v("longxin","创建单个文件" + destFileName + "失败！" + e.getMessage());
++            return false;
++        }
++    }
++
++    //add by longxin
++
+     /**
+      * Start screen record.<br/>
+      * Can only be called on mState IDLE.
+@@ -185,6 +243,10 @@ public class ScreenCapture implements SurfaceTexture.OnFrameAvailableListener {
+         mState.set(SCREEN_STATE_STOPPING);
+         mScreenSetupHandler.removeMessages(MSG_SCREEN_RELEASE);
+         mScreenSetupHandler.sendMessage(msg);
++        //add by longxin
++//        android.util.Log.v("longxin","stopRecording");
++//        mVideoEncoder.stopRecording();
++        //add by longxin
+     }
+ 
+     public void release() {
+@@ -228,7 +290,7 @@ public class ScreenCapture implements SurfaceTexture.OnFrameAvailableListener {
+         mGLRender.requestRender();
+         if (mMainHandler != null) {
+             mMainHandler.removeCallbacks(mFillFrameRunnable);
+-            mMainHandler.postDelayed(mFillFrameRunnable, 100);
++            mMainHandler.postDelayed(mFillFrameRunnable, 30);
+         }
+     }
+ 
+@@ -320,6 +382,20 @@ public class ScreenCapture implements SurfaceTexture.OnFrameAvailableListener {
+ 
+             float[] texMatrix = new float[16];
+             mSurfaceTexture.getTransformMatrix(texMatrix);
++//            android.util.Log.v("longxin","texMatrix:"+ Arrays.toString(texMatrix));
++            //add by longxin
++//            if( !isRecording ) {
++//                android.util.Log.v("longxin","startRecording");
++//                mVideoEncoder.startRecording(new TextureMovieEncoder.EncoderConfig(
++//                        mOutputFile, 640, 480, 1000, EGL14.eglGetCurrentContext()));
++//                isRecording = true;
++//            }
++//
++//            mVideoEncoder.setTextureId(mTextureId);
++//            mVideoEncoder.frameAvailable(mSurfaceTexture);
++
++            //add by longxin
++
+             ImgTexFrame frame = new ImgTexFrame(mImgTexFormat, mTextureId, texMatrix, pts);
+             try {
+                 mImgTexSrcConnector.onFrameAvailable(frame);
