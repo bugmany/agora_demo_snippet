@@ -1,0 +1,76 @@
+diff --git a/Agora-Video-With-FaceUnity-Android/app/src/main/java/io/agora/rtcwithfu/activities/FUChatActivity.java b/Agora-Video-With-FaceUnity-Android/app/src/main/java/io/agora/rtcwithfu/activities/FUChatActivity.java
+index f21ecb4..e00bd49 100644
+--- a/Agora-Video-With-FaceUnity-Android/app/src/main/java/io/agora/rtcwithfu/activities/FUChatActivity.java
++++ b/Agora-Video-With-FaceUnity-Android/app/src/main/java/io/agora/rtcwithfu/activities/FUChatActivity.java
+@@ -81,6 +81,22 @@ public class FUChatActivity extends FUBaseActivity implements RtcEngineEventHand
+     private MediaMuxerWrapper mMuxer;
+     private MediaVideoEncoder mVideoEncoder;
+ 
++    //add by longxin
++    float[] transformMatrixBack = new float[]{
++         -1.0f, 0.0f, 0.0f, 0.0f,
++          0.0f, 1.0f, 0.0f, 0.0f,
++            0.0f, 0.0f, 1.0f, 0.0f,
++           1.0f, 0.0f, 0.0f, 1.0f};
++
++    float[] transformMatrixFront =  new float[]{
++          1.0f, 0.0f, 0.0f, 0.0f,
++           0.0f, 1.0f, 0.0f, 0.0f,
++            0.0f, 0.0f, 1.0f, 0.0f,
++             0.0f, 0.0f, 0.0f, 1.0f
++      };
++    private boolean mFirstRemoteDecode = true;
++    //add by longxin
++
+     @Override
+     protected void onCreate(Bundle savedInstanceState) {
+         super.onCreate(savedInstanceState);
+@@ -146,9 +162,11 @@ public class FUChatActivity extends FUBaseActivity implements RtcEngineEventHand
+                 fuTextureId = mFURenderer.onDrawFrame(cameraNV21Byte, cameraTextureId,
+                         cameraWidth, cameraHeight, backImage, cameraWidth, cameraHeight);
+                 if (mVideoFrameConsumerReady) {
+-                    mIVideoFrameConsumer.consumeByteArrayFrame(backImage,
+-                            MediaIO.PixelFormat.NV21.intValue(), cameraWidth,
+-                            cameraHeight, mCameraOrientation, System.currentTimeMillis());
++//                    mIVideoFrameConsumer.consumeByteArrayFrame(backImage,
++//                            MediaIO.PixelFormat.NV21.intValue(), cameraWidth,
++//                            cameraHeight, mCameraOrientation, System.currentTimeMillis());
++                     mIVideoFrameConsumer.consumeTextureFrame(fuTextureId, MediaIO.PixelFormat.TEXTURE_2D.intValue(),
++                             cameraWidth, cameraHeight, 270, System.currentTimeMillis(), transformMatrixBack);
+                 }
+                 sendRecordingData(fuTextureId, mtx, timeStamp / Constant.NANO_IN_ONE_MILLI_SECOND);
+                 return fuTextureId;
+@@ -324,19 +342,25 @@ public class FUChatActivity extends FUBaseActivity implements RtcEngineEventHand
+ 
+     @Override
+     public void onFirstRemoteVideoDecoded(final int uid, int width, int height, int elapsed) {
+-        runOnUiThread(new Runnable() {
+-            @Override
+-            public void run() {
+-                setupRemoteVideo(uid);
+-            }
+-        });
++        android.util.Log.v("longxin","uid:"+uid);
++        if(mFirstRemoteDecode){// 每次都要回调，否则会出现远端画面卡死，这是一段测试代码！
++            runOnUiThread(new Runnable() {
++                @Override
++                public void run() {
++                    setupRemoteVideo(uid);
++                }
++            });
++            mFirstRemoteDecode = false;
++        }
+     }
+ 
+     private void setupRemoteVideo(int uid) {
+         mRemoteUid = uid;
+         mRemoteView.init(((TextureSource) mSource).getEglContext());
+-        mRemoteView.setBufferType(MediaIO.BufferType.BYTE_ARRAY);
+-        mRemoteView.setPixelFormat(MediaIO.PixelFormat.I420);
++//        mRemoteView.setBufferType(MediaIO.BufferType.BYTE_ARRAY);
++//        mRemoteView.setPixelFormat(MediaIO.PixelFormat.I420);
++        mRemoteView.setBufferType(MediaIO.BufferType.TEXTURE);
++        mRemoteView.setPixelFormat(MediaIO.PixelFormat.TEXTURE_2D);
+         getRtcEngine().setRemoteVideoRenderer(uid, mRemoteView);
+     }
+ 
